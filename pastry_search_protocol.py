@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
-
 import hashlib
 import threading
 import random
@@ -14,8 +8,6 @@ import matplotlib.pyplot as plt
 import time
 
 
-# In[2]:
-
 
 def generate_random_string(length):
     letters = string.ascii_lowercase
@@ -23,15 +15,13 @@ def generate_random_string(length):
     return rand_string
 
 
-# In[3]:
-
 
 class node:
     def __init__(self, num):
         self.id = num
         self.routing_table = []
         self.routing_table_ids = []
-        self.files = []
+        self.files = []        
         
     def find_root(self, goal):
         goal = (str(goal))
@@ -50,8 +40,10 @@ class node:
             return self
         else:
             return self.routing_table[idx_cur][int(goal[idx_goal])].find_root(goal)
-        
+
     def find_file(self, goal, path = [], depth = 0):
+        if depth > 1000:
+            return 0, depth
         for l in self.leaves:
             if goal == l.id:
                 return 1, depth
@@ -63,7 +55,7 @@ class node:
         while idx_goal < len(goal) and idx_cur < len(cur) and goal[idx_goal]==cur[idx_cur]:
             idx_goal += 1
             idx_cur += 1
-        if (idx_cur>=len(cur) or idx_goal>=len(goal) or
+        if (idx_cur>=len(self.routing_table) or idx_goal>=len(goal) or int(goal[idx_goal])>=len(self.routing_table[idx_cur])
            self.routing_table[idx_cur][int(goal[idx_goal])] == None or goal in self.files):
             if goal in self.files:
                 return 1, depth
@@ -71,7 +63,6 @@ class node:
                 return 0, depth
         else:
             return self.routing_table[idx_cur][int(goal[idx_goal])].find_file(goal, path, depth+1)
-        
         
     def add_edge(self, n):
         flag = False
@@ -84,12 +75,11 @@ class node:
             if flag:
                 break
                     
-                    
-    def find_neighbours(self):
+    def find_neighbours(self, hosts):
         self.neighbours = []
         for i in range(10):
-            idx = random.randint(0, len(self.hosts)-1)
-            self.neighbours.append(self.hosts[idx])
+            idx = random.randint(0, len(hosts)-1)
+            self.neighbours.append(hosts[idx])
             
             
     def find_leaves(self, hosts):
@@ -111,8 +101,6 @@ class node:
                     to.dfs(used)
 
 
-# In[4]:
-
 
 class net:
     def __init__(self, n):
@@ -129,7 +117,7 @@ class net:
             hosts.append(host_id)
         hosts.sort()
         return hosts
-        
+                
     def find_links(self, host):
         host = str(host) 
         prefix = ""
@@ -154,9 +142,7 @@ class net:
             links.append(links_on_level)
             prefix += host[i]
         return links
-        
-    
-        
+            
     def build_graph(self):
         self.hosts = self.generate_vertexes()
         for host in self.hosts:
@@ -166,15 +152,13 @@ class net:
             idx = len(self.nodes)-1
             self.nodes[idx].routing_table_ids = self.find_links(host)
             self.nodes[idx].files = net.files_generator(self.ring_size)
-            self.nodes[idx].find_neighbours()
-            self.nodes[idx].find_leaves(self.hosts)
+            self.nodes[idx].find_neighbours(self.nodes)
+            self.nodes[idx].find_leaves(self.nodes)
         self.fix_links()
-        
         self.fix_connection()
-                
+                        
     def fix_links(self):
         for n in self.nodes:
-            #print(n.routing_table_ids)
             links = []
             for level in n.routing_table_ids:
                 links_on_level = []
@@ -183,7 +167,7 @@ class net:
                         links_on_level.append(self.id_to_node[link])
                 links.append(links_on_level)
             n.routing_table = links
-      
+          
     def move_files(self):
         for n in self.nodes:
             res = []
@@ -192,18 +176,18 @@ class net:
                 res.append(file)
             if(root):
                 root.files += res
-    
+        
     def get_id(st, mod):
         string = str(st)
         return int(hashlib.sha1(string.encode()).hexdigest(), 16) % mod
-        
+             
     def ip_generator():
         a = random.randint(0,255)
         b = random.randint(0,255)
         c = random.randint(0,255)
         d = random.randint(0,255)
         return str(a)+'.'+str(b)+'.'+str(c)+'.'+str(d)
-        
+                
     def files_generator(mod):
         files = []
         cnt = random.randint(0, 30)
@@ -213,31 +197,18 @@ class net:
             file = net.get_id(file_name, mod)
             files.append(net.get_id(file, mod))
         return files
-    
   
     
     def fix_connection(self):
         used = {}
         last = None
         for n in self.nodes:
-            #print(n.id)
-            #print(used)
             if not n.id in used:
                 if last:
                     last.add_edge(n)
                 last = n
                 n.dfs(used)
-                
-    
 
-
-# In[ ]:
-
-
-G = net(100)
-
-
-# In[ ]:
 
 
 def send_queries(G, queries_cnt):
@@ -246,9 +217,7 @@ def send_queries(G, queries_cnt):
     average_depth = 0
     were_found = 0
     for vertex in G.nodes:
-        #print("мы находимся в компьютере ", vertex.id)
         for query in range(queries_cnt):
-            #print("ищем в сети рандомный файл")
             length = random.randint(0, 30) 
             file_to_find = generate_random_string(length)
             was_found, depth = vertex.find_file(net.get_id(file_to_find, 2**(G.ring_size)))
@@ -256,28 +225,31 @@ def send_queries(G, queries_cnt):
             max_depth = max(max_depth, depth)
             average_depth += depth
             were_found += was_found
-            #print(depth)
         average_depth /= queries_cnt
     return min_depth, max_depth, average_depth, were_found
 
 
-# In[ ]:
-
 
 def graph_visualization(G, path = []):
     gr = nx.DiGraph()
-    sorted(G.vertexes, key=lambda n: n.id)
+    sorted(G.nodes, key=lambda n: n.id)
     edges = {}
-    for vertex in G.vertexes:
-        gr.add_edge(vertex.id, vertex.successor.id)
-        for finger in vertex.fingers:
+    for vertex in G.nodes:
+        for layer in vertex.routing_table:
+            for finger in layer:
+                gr.add_edge(vertex.id, finger.id)
+            
+        for finger in vertex.leaves:
+            gr.add_edge(vertex.id, finger.id)
+            
+        for finger in vertex.neighbours:
             gr.add_edge(vertex.id, finger.id)
     nodes = {}
     idx = 0
     for node in gr.nodes:
         nodes[node] = idx
         idx += 1
-        
+    print(path)
     node_colors = ['pink']*(len(gr.nodes))
     nx.draw_circular(gr, with_labels = True, node_color=node_colors)
     img_name = "Graph" + "_before" + ".png"
@@ -298,8 +270,7 @@ def graph_visualization(G, path = []):
     plt.savefig(img_name, format="PNG")
 
 
-# In[ ]:
-
+G = net(100)
 
 queries_cnt = 10
 
@@ -311,14 +282,9 @@ print("минимальная длина пути ", min_depth)
 print("максимальная длина пути ", max_depth)
 print("средняя длина пути ", average_depth)
 
-
-# In[ ]:
-
-
 little_net = net(20)
 vertex = little_net.nodes[0]
-file_to_find = generate_random_string(3)
 path = []
-was_found, depth = vertex.find_file(141, path)
-graph_visualization(little_net, path)
+was_found, depth = vertex.find_file(1647, path)
 
+graph_visualization(little_net, path)
